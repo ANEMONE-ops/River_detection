@@ -1,0 +1,1831 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>水面垃圾实时检测系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #0c1220 0%, #1a2a4a 100%);
+            color: #e6f7ff;
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
+
+        /* 导航栏样式 */
+        .navbar {
+            background: rgba(15, 30, 60, 0.85);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            border-bottom: 1px solid rgba(64, 224, 255, 0.2);
+        }
+
+        .nav-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            background: linear-gradient(45deg, #00e4ff, #00ffaa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .nav-menu {
+            display: flex;
+            list-style: none;
+            gap: 1.5rem;
+        }
+
+        .nav-item {
+            cursor: pointer;
+            padding: 0.5rem 1rem;
+            border-radius: 25px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(64, 224, 255, 0.2);
+            background: rgba(20, 40, 80, 0.3);
+        }
+
+        .nav-item:hover {
+            background: rgba(30, 60, 120, 0.5);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 228, 255, 0.2);
+        }
+
+        .nav-item.active {
+            background: linear-gradient(45deg, #00a8cc, #00d4ff);
+            color: #0c1220;
+            font-weight: 600;
+            border: 1px solid rgba(64, 224, 255, 0.5);
+            box-shadow: 0 0 15px rgba(0, 228, 255, 0.3);
+        }
+
+        /* 页面容器 */
+        .page-container {
+            margin-top: 80px;
+            min-height: calc(100vh - 80px);
+            padding: 2rem;
+        }
+
+        .page {
+            display: none;
+            animation: fadeIn 0.5s ease-in-out;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 实时监控页面 */
+        .monitor-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .monitor-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .monitor-header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(45deg, #00e4ff, #00ffaa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 15px rgba(0, 228, 255, 0.3);
+        }
+
+        .video-container {
+            position: relative;
+            background: rgba(10, 20, 40, 0.7);
+            border-radius: 15px;
+            padding: 1rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(64, 224, 255, 0.2);
+            backdrop-filter: blur(5px);
+        }
+
+        .video-feed {
+            width: 100%;
+            max-width: 800px;
+            height: 450px;
+            background: linear-gradient(135deg, #0a1a2a, #1a2a4a);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(64, 224, 255, 0.3);
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .detection-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .video-placeholder {
+            text-align: center;
+            color: #666;
+        }
+
+        .video-placeholder i {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        .control-panel {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn:before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .btn:hover:before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .btn-success {
+            background: linear-gradient(45deg, #11998e, #38ef7d);
+            color: white;
+        }
+
+        .btn-danger {
+            background: linear-gradient(45deg, #eb3349, #f45c43);
+            color: white;
+        }
+
+        .btn-warning {
+            background: linear-gradient(45deg, #f7971e, #ffd200);
+            color: white;
+        }
+
+        .detection-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .info-card {
+            background: rgba(15, 30, 60, 0.6);
+            padding: 1.5rem;
+            border-radius: 10px;
+            text-align: center;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(64, 224, 255, 0.2);
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .info-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 228, 255, 0.2);
+            border: 1px solid rgba(64, 224, 255, 0.4);
+        }
+
+        .info-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #00e4ff;
+            margin-bottom: 0.5rem;
+            text-shadow: 0 0 10px rgba(0, 228, 255, 0.5);
+        }
+
+        .info-label {
+            color: #a0aec0;
+            font-size: 0.9rem;
+        }
+
+        /* 图表分析页面 */
+        .charts-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .charts-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .charts-header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(45deg, #00e4ff, #00ffaa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 15px rgba(0, 228, 255, 0.3);
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .chart-card {
+            background: rgba(15, 30, 60, 0.6);
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(64, 224, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .chart-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0, 228, 255, 0.2);
+            border: 1px solid rgba(64, 224, 255, 0.4);
+        }
+
+        .chart-title {
+            font-size: 1.3rem;
+            margin-bottom: 1rem;
+            color: #00e4ff;
+            text-align: center;
+            text-shadow: 0 0 10px rgba(0, 228, 255, 0.3);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: rgba(15, 30, 60, 0.6);
+            padding: 1.5rem;
+            border-radius: 10px;
+            text-align: center;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(64, 224, 255, 0.2);
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .stat-card:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 25px rgba(0, 228, 255, 0.2);
+            border: 1px solid rgba(64, 224, 255, 0.4);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #00ffaa;
+            margin-bottom: 0.5rem;
+            text-shadow: 0 0 10px rgba(0, 255, 170, 0.3);
+        }
+
+        .stat-name {
+            color: #a0aec0;
+            font-size: 0.9rem;
+        }
+
+        /* 警报中心页面 */
+        .alerts-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .alerts-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .alerts-header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(45deg, #ff6b6b, #ffa500);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 15px rgba(255, 107, 107, 0.3);
+        }
+
+        .alert-levels {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .alert-level {
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .level-high {
+            background: rgba(255, 107, 107, 0.2);
+            color: #ff6b6b;
+            border: 1px solid rgba(255, 107, 107, 0.3);
+        }
+
+        .level-medium {
+            background: rgba(255, 165, 0, 0.2);
+            color: #ffa500;
+            border: 1px solid rgba(255, 165, 0, 0.3);
+        }
+
+        .level-low {
+            background: rgba(0, 228, 255, 0.2);
+            color: #00e4ff;
+            border: 1px solid rgba(0, 228, 255, 0.3);
+        }
+
+        .alerts-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .alert-item {
+            background: rgba(15, 30, 60, 0.6);
+            padding: 1.5rem;
+            border-radius: 10px;
+            border-left: 4px solid;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255,255,255,0.1);
+            animation: slideIn 0.5s ease-out;
+            transition: all 0.3s ease;
+        }
+
+        .alert-item:hover {
+            transform: translateX(5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .alert-item.high {
+            border-left-color: #ff6b6b;
+            background: rgba(120, 20, 20, 0.3);
+        }
+
+        .alert-item.medium {
+            border-left-color: #ffa500;
+            background: rgba(120, 80, 0, 0.3);
+        }
+
+        .alert-item.low {
+            border-left-color: #00e4ff;
+            background: rgba(0, 60, 80, 0.3);
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(-100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .alert-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .alert-title {
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .alert-time {
+            color: #a0aec0;
+            font-size: 0.9rem;
+        }
+
+        .alert-content {
+            color: #cbd5e0;
+            margin-bottom: 0.5rem;
+        }
+
+        .alert-location {
+            color: #00e4ff;
+            font-size: 0.9rem;
+        }
+
+        .alert-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        /* 历史记录页面 */
+        .history-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .history-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .history-header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .filter-controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .filter-label {
+            color: #a0aec0;
+            font-size: 0.9rem;
+        }
+
+        .filter-input {
+            padding: 0.5rem;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 5px;
+            background: rgba(15, 30, 60, 0.6);
+            color: white;
+            backdrop-filter: blur(5px);
+        }
+
+        .history-table {
+            background: rgba(15, 30, 60, 0.6);
+            border-radius: 15px;
+            overflow: hidden;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .table-header {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+            gap: 1rem;
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.3);
+            font-weight: 600;
+            color: #00e4ff;
+        }
+
+        .table-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+            gap: 1rem;
+            padding: 1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            transition: all 0.3s ease;
+        }
+
+        .table-row:hover {
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .table-cell {
+            display: flex;
+            align-items: center;
+            color: #cbd5e0;
+        }
+
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .status-completed {
+            background: rgba(0, 228, 255, 0.2);
+            color: #00e4ff;
+        }
+
+        .status-detected {
+            background: rgba(255, 107, 107, 0.2);
+            color: #ff6b6b;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .nav-menu {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .table-header,
+            .table-row {
+                grid-template-columns: 1fr;
+                text-align: center;
+            }
+
+            .video-feed {
+                height: 300px;
+            }
+
+            .control-panel {
+                flex-direction: column;
+                align-items: center;
+            }
+        }
+
+        /* 加载动画 */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.1);
+            border-radius: 50%;
+            border-top-color: #667eea;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* 垃圾检测框样式 */
+        .detection-box {
+            position: absolute;
+            border: 3px solid;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(2px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            text-shadow: 0 0 5px rgba(0, 0, 0, 0.8);
+            box-shadow: 0 0 15px currentColor;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 10px currentColor; }
+            50% { box-shadow: 0 0 20px currentColor, 0 0 30px currentColor; }
+            100% { box-shadow: 0 0 10px currentColor; }
+        }
+
+        .detection-box.plastic {
+            border-color: #ff6b6b;
+            color: #ff6b6b;
+        }
+
+        .detection-box.bottle {
+            border-color: #ffa500;
+            color: #ffa500;
+        }
+
+        .detection-box.bag {
+            border-color: #00e4ff;
+            color: #00e4ff;
+        }
+
+        .detection-box.can {
+            border-color: #00ffaa;
+            color: #00ffaa;
+        }
+
+        .detection-box.unknown {
+            border-color: #cccccc;
+            color: #cccccc;
+        }
+
+        .confidence-score {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+            margin-top: 2px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="logo">
+                🌊由yangzhe菜鸡研发的水面垃圾检测系统
+            </div>
+            <ul class="nav-menu">
+                <li class="nav-item active" onclick="showPage('monitor')">实时监控</li>
+                <li class="nav-item" onclick="showPage('analysis')">图表分析</li>
+                <li class="nav-item" onclick="showPage('alerts')">警报中心</li>
+                <li class="nav-item" onclick="showPage('history')">历史记录</li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- 页面容器 -->
+    <div class="page-container">
+        <!-- 实时监控页面 -->
+        <div id="monitor" class="page active">
+            <div class="monitor-container">
+                <div class="monitor-header">
+                    <h1>🔍 实时垃圾检测监控</h1>
+                    <p>基于YOLO算法的水面垃圾智能识别系统</p>
+                </div>
+
+                <div class="video-container">
+                    <div class="video-feed" id="videoFeed">
+                        <div class="video-placeholder">
+                            <i>📹</i>
+                            <p>摄像头未连接</p>
+                            <small>点击下方按钮启动摄像头</small>
+                        </div>
+                        <canvas class="detection-canvas" id="detectionCanvas"></canvas>
+                    </div>
+                </div>
+
+                <div class="control-panel">
+                    <button class="btn btn-success" onclick="startCamera()">
+                        ▶️ 启动摄像头
+                    </button>
+                    <button class="btn btn-danger" onclick="stopCamera()">
+                        ⏹️ 停止检测
+                    </button>
+                    <button class="btn btn-warning" onclick="takeSnapshot()">
+                        📸 拍照记录
+                    </button>
+                    <button class="btn btn-primary" onclick="switchCamera()">
+                        🔄 切换摄像头
+                    </button>
+                </div>
+
+                <div class="detection-info">
+                    <div class="info-card">
+                        <div class="info-number" id="totalDetections">0</div>
+                        <div class="info-label">总检测数量</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="info-number" id="plasticCount">0</div>
+                        <div class="info-label">塑料瓶</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="info-number" id="bagCount">0</div>
+                        <div class="info-label">塑料袋</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="info-number" id="canCount">0</div>
+                        <div class="info-label">易拉罐</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="info-number" id="currentFPS">0</div>
+                        <div class="info-label">检测帧率</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="info-number" id="accuracy">0%</div>
+                        <div class="info-label">识别准确率</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 图表分析页面 -->
+        <div id="analysis" class="page">
+            <div class="charts-container">
+                <div class="charts-header">
+                    <h1>📊 垃圾检测数据分析</h1>
+                    <p>多维度数据分析与可视化展示</p>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="todayDetections">0</div>
+                        <div class="stat-name">今日检测</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="weekDetections">0</div>
+                        <div class="stat-name">本周检测</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="monthDetections">0</div>
+                        <div class="stat-name">本月检测</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="avgConfidence">0%</div>
+                        <div class="stat-name">平均置信度</div>
+                    </div>
+                </div>
+
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <div class="chart-title">垃圾类型分布</div>
+                        <div class="chart-container">
+                            <canvas id="typeChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">检测趋势分析</div>
+                        <div class="chart-container">
+                            <canvas id="trendChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">时段分布统计</div>
+                        <div class="chart-container">
+                            <canvas id="hourChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">置信度分布</div>
+                        <div class="chart-container">
+                            <canvas id="confidenceChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 警报中心页面 -->
+        <div id="alerts" class="page">
+            <div class="alerts-container">
+                <div class="alerts-header">
+                    <h1>🚨 垃圾检测警报中心</h1>
+                    <p>实时监控与异常预警</p>
+                </div>
+
+                <div class="alert-levels">
+                    <div class="alert-level level-high">🔴 高级警报</div>
+                    <div class="alert-level level-medium">🟡 中级警报</div>
+                    <div class="alert-level level-low">🟢 低级警报</div>
+                </div>
+
+                <div class="alert-stats">
+                    <div class="stat-card">
+                        <div class="stat-value" id="highAlerts">0</div>
+                        <div class="stat-name">高级警报</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="mediumAlerts">0</div>
+                        <div class="stat-name">中级警报</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="lowAlerts">0</div>
+                        <div class="stat-name">低级警报</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalAlerts">0</div>
+                        <div class="stat-name">总警报数</div>
+                    </div>
+                </div>
+
+                <div class="alerts-list" id="alertsList">
+                    <!-- 警报列表将动态生成 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 历史记录页面 -->
+        <div id="history" class="page">
+            <div class="history-container">
+                <div class="history-header">
+                    <h1>📜 检测历史记录</h1>
+                    <p>完整的检测数据与历史分析</p>
+                </div>
+
+                <div class="filter-controls">
+                    <div class="filter-group">
+                        <label class="filter-label">开始日期</label>
+                        <input type="date" class="filter-input" id="startDate">
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label">结束日期</label>
+                        <input type="date" class="filter-input" id="endDate">
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label">垃圾类型</label>
+                        <select class="filter-input" id="wasteType">
+                            <option value="">全部类型</option>
+                            <option value="plastic">塑料瓶</option>
+                            <option value="bag">塑料袋</option>
+                            <option value="can">易拉罐</option>
+                            <option value="bottle">玻璃瓶</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label">置信度</label>
+                        <select class="filter-input" id="confidenceFilter">
+                            <option value="">全部</option>
+                            <option value="high">高(>90%)</option>
+                            <option value="medium">中(70-90%)</option>
+                            <option value="low">低(<70%)</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" onclick="applyFilters()">
+                        🔍 应用筛选
+                    </button>
+                    <button class="btn btn-success" onclick="exportHistory()">
+                        📥 导出数据
+                    </button>
+                </div>
+
+                <div class="history-table">
+                    <div class="table-header">
+                        <div>检测时间</div>
+                        <div>垃圾类型</div>
+                        <div>置信度</div>
+                        <div>位置</div>
+                        <div>状态</div>
+                    </div>
+                    <div id="historyTableBody">
+                        <!-- 历史记录将动态生成 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let stream = null;
+        let video = null;
+        let canvas = null;
+        let ctx = null;
+        let isDetecting = false;
+        let animationId = null;
+        let currentCamera = 'user'; // 或 'environment'
+        
+        // 图表实例
+        let typeChart, trendChart, hourChart, confidenceChart;
+        
+        // 模拟数据存储
+        let detectionData = {
+            total: 0,
+            types: { plastic: 0, bag: 0, can: 0, bottle: 0, unknown: 0 },
+            hourly: new Array(24).fill(0),
+            daily: new Array(30).fill(0),
+            confidences: [],
+            history: []
+        };
+        
+        // 警报数据
+        let alerts = [];
+        let alertId = 0;
+
+        // 页面切换功能
+        function showPage(pageId) {
+            // 隐藏所有页面
+            const pages = document.querySelectorAll('.page');
+            pages.forEach(page => page.classList.remove('active'));
+            
+            // 显示目标页面
+            document.getElementById(pageId).classList.add('active');
+            
+            // 更新导航栏状态
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => item.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // 根据页面初始化相应功能
+            if (pageId === 'analysis') {
+                initCharts();
+                updateChartData();
+            } else if (pageId === 'alerts') {
+                updateAlertsDisplay();
+            } else if (pageId === 'history') {
+                updateHistoryTable();
+            }
+        }
+
+        // 启动摄像头
+        async function startCamera() {
+            try {
+                // 停止之前的流
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+                
+                // 创建视频元素
+                video = document.createElement('video');
+                video.autoplay = true;
+                video.playsInline = true;
+                
+                // 获取媒体流
+                const constraints = {
+                    video: { 
+                        facingMode: currentCamera,
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: false
+                };
+                
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                
+                // 等待视频加载完成
+                video.onloadedmetadata = () => {
+                    setupCanvas();
+                    startDetection();
+                    showNotification('摄像头已启动', 'success');
+                };
+                
+            } catch (error) {
+                console.error('启动摄像头失败:', error);
+                showNotification('无法访问摄像头，请检查权限设置', 'error');
+            }
+        }
+
+        // 设置画布
+        function setupCanvas() {
+            const videoFeed = document.getElementById('videoFeed');
+            const detectionCanvas = document.getElementById('detectionCanvas');
+            
+            // 清除占位符
+            videoFeed.innerHTML = '';
+            videoFeed.appendChild(video);
+            videoFeed.appendChild(detectionCanvas);
+            
+            // 设置画布尺寸
+            canvas = detectionCanvas;
+            ctx = canvas.getContext('2d');
+            canvas.width = video.videoWidth || 800;
+            canvas.height = video.videoHeight || 450;
+            
+            // 设置画布样式
+            canvas.style.position = 'absolute';
+            canvas.style.top = '0';
+            canvas.style.left = '0';
+            canvas.style.width = '100%';
+            canvas.style.height = '100%';
+        }
+
+        // 开始检测
+        function startDetection() {
+            isDetecting = true;
+            detectFrame();
+        }
+
+        // 检测帧
+        function detectFrame() {
+            if (!isDetecting || !video || !canvas) return;
+            
+            // 清除画布
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 模拟YOLO检测
+            simulateYOLODetection();
+            
+            // 更新统计数据
+            updateDetectionStats();
+            
+            // 继续下一帧
+            animationId = requestAnimationFrame(detectFrame);
+        }
+
+        // 模拟YOLO检测（实际应用中需要集成真实的YOLO模型）
+        function simulateYOLODetection() {
+            // 随机生成检测框
+            const numDetections = Math.floor(Math.random() * 5) + 1;
+            
+            for (let i = 0; i < numDetections; i++) {
+                // 随机生成检测框参数
+                const x = Math.random() * (canvas.width - 100) + 50;
+                const y = Math.random() * (canvas.height - 100) + 50;
+                const width = Math.random() * 100 + 50;
+                const height = Math.random() * 100 + 50;
+                
+                // 随机垃圾类型
+                const types = ['plastic', 'bottle', 'bag', 'can', 'unknown'];
+                const type = types[Math.floor(Math.random() * types.length)];
+                
+                // 随机置信度
+                const confidence = Math.random() * 0.3 + 0.7; // 70%-100%
+                
+                // 绘制检测框
+                drawDetectionBox(x, y, width, height, type, confidence);
+                
+                // 记录检测数据
+                recordDetection(type, confidence, x, y);
+            }
+        }
+
+        // 绘制检测框
+        function drawDetectionBox(x, y, width, height, type, confidence) {
+            const colors = {
+                plastic: '#ff6b6b',
+                bottle: '#ffa500',
+                bag: '#00e4ff',
+                can: '#00ffaa',
+                unknown: '#cccccc'
+            };
+            
+            const labels = {
+                plastic: '塑料瓶',
+                bottle: '玻璃瓶',
+                bag: '塑料袋',
+                can: '易拉罐',
+                unknown: '未知垃圾'
+            };
+            
+            // 绘制边框
+            ctx.strokeStyle = colors[type];
+            ctx.lineWidth = 3;
+            ctx.strokeRect(x, y, width, height);
+            
+            // 绘制填充背景
+            ctx.fillStyle = colors[type] + '20';
+            ctx.fillRect(x, y, width, height);
+            
+            // 绘制标签背景
+            const label = `${labels[type]} ${(confidence * 100).toFixed(1)}%`;
+            ctx.font = '14px Arial';
+            const textWidth = ctx.measureText(label).width;
+            
+            ctx.fillStyle = colors[type] + 'CC';
+            ctx.fillRect(x, y - 25, textWidth + 10, 25);
+            
+            // 绘制标签文字
+            ctx.fillStyle = '#000';
+            ctx.fillText(label, x + 5, y - 8);
+            
+            // 绘制角落标记
+            drawCornerMarkers(x, y, width, height, colors[type]);
+        }
+
+        // 绘制角落标记
+        function drawCornerMarkers(x, y, width, height, color) {
+            const cornerLength = 20;
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            
+            // 左上角
+            ctx.beginPath();
+            ctx.moveTo(x, y + cornerLength);
+            ctx.lineTo(x, y);
+            ctx.lineTo(x + cornerLength, y);
+            ctx.stroke();
+            
+            // 右上角
+            ctx.beginPath();
+            ctx.moveTo(x + width - cornerLength, y);
+            ctx.lineTo(x + width, y);
+            ctx.lineTo(x + width, y + cornerLength);
+            ctx.stroke();
+            
+            // 左下角
+            ctx.beginPath();
+            ctx.moveTo(x, y + height - cornerLength);
+            ctx.lineTo(x, y + height);
+            ctx.lineTo(x + cornerLength, y + height);
+            ctx.stroke();
+            
+            // 右下角
+            ctx.beginPath();
+            ctx.moveTo(x + width - cornerLength, y + height);
+            ctx.lineTo(x + width, y + height);
+            ctx.lineTo(x + width, y + height - cornerLength);
+            ctx.stroke();
+        }
+
+        // 记录检测数据
+        function recordDetection(type, confidence, x, y) {
+            const now = new Date();
+            
+            // 更新总数
+            detectionData.total++;
+            detectionData.types[type]++;
+            
+            // 记录小时数据
+            const hour = now.getHours();
+            detectionData.hourly[hour]++;
+            
+            // 记录置信度
+            detectionData.confidences.push(confidence);
+            if (detectionData.confidences.length > 100) {
+                detectionData.confidences.shift();
+            }
+            
+            // 添加到历史记录
+            detectionData.history.unshift({
+                time: now.toLocaleString(),
+                type: type,
+                confidence: (confidence * 100).toFixed(1),
+                location: `区域${Math.floor(Math.random() * 5) + 1}`,
+                x: x,
+                y: y
+            });
+            
+            // 保持历史记录在合理范围内
+            if (detectionData.history.length > 1000) {
+                detectionData.history.pop();
+            }
+            
+            // 检查是否需要生成警报
+            checkForAlert(type, confidence, x, y);
+        }
+
+        // 检查警报条件
+        function checkForAlert(type, confidence, x, y) {
+            // 模拟警报逻辑
+            if (confidence > 0.9 && Math.random() > 0.7) {
+                const alertLevel = Math.random() > 0.7 ? 'high' : 'medium';
+                const alertType = type === 'plastic' ? '塑料污染' : 
+                                type === 'bag' ? '塑料袋堆积' : 
+                                type === 'can' ? '金属垃圾' : '其他垃圾';
+                
+                createAlert(
+                    alertLevel,
+                    `检测到${alertType}`,
+                    `置信度: ${(confidence * 100).toFixed(1)}%`,
+                    `位置: 区域${Math.floor(Math.random() * 5) + 1}`,
+                    new Date()
+                );
+            }
+        }
+
+        // 创建警报
+        function createAlert(level, title, content, location, time) {
+            const alert = {
+                id: alertId++,
+                level: level,
+                title: title,
+                content: content,
+                location: location,
+                time: time.toLocaleString(),
+                status: 'active'
+            };
+            
+            alerts.unshift(alert);
+            
+            // 保持警报数量在合理范围内
+            if (alerts.length > 100) {
+                alerts.pop();
+            }
+            
+            // 更新警报显示
+            if (document.getElementById('alerts').classList.contains('active')) {
+                updateAlertsDisplay();
+            }
+            
+            // 显示通知
+            showNotification(`新警报: ${title}`, level);
+        }
+
+        // 更新检测统计
+        function updateDetectionStats() {
+            document.getElementById('totalDetections').textContent = detectionData.total;
+            document.getElementById('plasticCount').textContent = detectionData.types.plastic;
+            document.getElementById('bagCount').textContent = detectionData.types.bag;
+            document.getElementById('canCount').textContent = detectionData.types.can;
+            
+            // 计算平均置信度
+            const avgConfidence = detectionData.confidences.length > 0 
+                ? (detectionData.confidences.reduce((a, b) => a + b, 0) / detectionData.confidences.length * 100).toFixed(1)
+                : 0;
+            document.getElementById('accuracy').textContent = avgConfidence + '%';
+            
+            // 模拟FPS
+            const fps = Math.floor(Math.random() * 10) + 20;
+            document.getElementById('currentFPS').textContent = fps;
+        }
+
+        // 停止摄像头
+        function stopCamera() {
+            isDetecting = false;
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            
+            // 重置视频显示
+            const videoFeed = document.getElementById('videoFeed');
+            videoFeed.innerHTML = `
+                <div class="video-placeholder">
+                    <i>📹</i>
+                    <p>摄像头已停止</p>
+                    <small>点击下方按钮启动摄像头</small>
+                </div>
+                <canvas class="detection-canvas" id="detectionCanvas"></canvas>
+            `;
+            
+            showNotification('摄像头已停止', 'info');
+        }
+
+        // 拍照记录
+        function takeSnapshot() {
+            if (!video || !canvas) {
+                showNotification('请先启动摄像头', 'warning');
+                return;
+            }
+            
+            // 创建临时画布
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = video.videoWidth;
+            tempCanvas.height = video.videoHeight;
+            
+            // 绘制当前帧
+            tempCtx.drawImage(video, 0, 0);
+            
+            // 绘制检测框
+            tempCtx.drawImage(canvas, 0, 0);
+            
+            // 转换为图片并下载
+            const link = document.createElement('a');
+            link.download = `detection_${new Date().getTime()}.png`;
+            link.href = tempCanvas.toDataURL();
+            link.click();
+            
+            showNotification('截图已保存', 'success');
+        }
+
+        // 切换摄像头
+        function switchCamera() {
+            currentCamera = currentCamera === 'user' ? 'environment' : 'user';
+            if (stream) {
+                stopCamera();
+                setTimeout(startCamera, 500);
+            }
+            showNotification(`切换到${currentCamera === 'user' ? '前置' : '后置'}摄像头`, 'info');
+        }
+
+        // 初始化图表
+        function initCharts() {
+            // 类型分布图
+            const typeCtx = document.getElementById('typeChart').getContext('2d');
+            typeChart = new Chart(typeCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['塑料瓶', '塑料袋', '易拉罐', '玻璃瓶', '其他'],
+                    datasets: [{
+                        data: [0, 0, 0, 0, 0],
+                        backgroundColor: [
+                            '#ff6b6b',
+                            '#00e4ff',
+                            '#00ffaa',
+                            '#ffa500',
+                            '#cccccc'
+                        ],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: '#e6f7ff',
+                                padding: 20
+                            }
+                        }
+                    }
+                }
+            });
+
+            // 趋势图
+            const trendCtx = document.getElementById('trendChart').getContext('2d');
+            trendChart = new Chart(trendCtx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: 30}, (_, i) => `${i + 1}日`),
+                    datasets: [{
+                        label: '检测数量',
+                        data: new Array(30).fill(0),
+                        borderColor: '#00e4ff',
+                        backgroundColor: 'rgba(0, 228, 255, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { color: '#a0aec0' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        },
+                        x: {
+                            ticks: { color: '#a0aec0' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        }
+                    }
+                }
+            });
+
+            // 时段分布图
+            const hourCtx = document.getElementById('hourChart').getContext('2d');
+            hourChart = new Chart(hourCtx, {
+                type: 'bar',
+                data: {
+                    labels: Array.from({length: 24}, (_, i) => `${i}:00`),
+                    datasets: [{
+                        label: '检测次数',
+                        data: new Array(24).fill(0),
+                        backgroundColor: '#667eea',
+                        borderRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { color: '#a0aec0' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        },
+                        x: {
+                            ticks: { color: '#a0aec0' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        }
+                    }
+                }
+            });
+
+            // 置信度分布图
+            const confidenceCtx = document.getElementById('confidenceChart').getContext('2d');
+            confidenceChart = new Chart(confidenceCtx, {
+                type: 'radar',
+                data: {
+                    labels: ['塑料瓶', '塑料袋', '易拉罐', '玻璃瓶', '其他'],
+                    datasets: [{
+                        label: '平均置信度',
+                        data: [0, 0, 0, 0, 0],
+                        borderColor: '#00e4ff',
+                        backgroundColor: 'rgba(0, 228, 255, 0.2)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        r: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: { color: '#a0aec0' },
+                            grid: { color: 'rgba(255,255,255,0.1)' },
+                            pointLabels: { color: '#a0aec0' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 更新图表数据
+        function updateChartData() {
+            // 更新类型分布
+            typeChart.data.datasets[0].data = [
+                detectionData.types.plastic,
+                detectionData.types.bag,
+                detectionData.types.can,
+                detectionData.types.bottle,
+                detectionData.types.unknown
+            ];
+            typeChart.update();
+            
+            // 更新趋势图
+            trendChart.data.datasets[0].data = detectionData.daily;
+            trendChart.update();
+            
+            // 更新时段分布
+            hourChart.data.datasets[0].data = detectionData.hourly;
+            hourChart.update();
+            
+            // 更新置信度分布
+            const avgConfidences = Object.keys(detectionData.types).map(type => {
+                const count = detectionData.types[type];
+                return count > 0 ? 85 + Math.random() * 10 : 0; // 模拟平均置信度
+            });
+            confidenceChart.data.datasets[0].data = avgConfidences;
+            confidenceChart.update();
+            
+            // 更新统计卡片
+            const today = detectionData.hourly.reduce((a, b) => a + b, 0);
+            const week = detectionData.daily.slice(-7).reduce((a, b) => a + b, 0);
+            const month = detectionData.daily.reduce((a, b) => a + b, 0);
+            const avgConfidence = detectionData.confidences.length > 0 
+                ? (detectionData.confidences.reduce((a, b) => a + b, 0) / detectionData.confidences.length * 100).toFixed(1)
+                : 0;
+            
+            document.getElementById('todayDetections').textContent = today;
+            document.getElementById('weekDetections').textContent = week;
+            document.getElementById('monthDetections').textContent = month;
+            document.getElementById('avgConfidence').textContent = avgConfidence + '%';
+        }
+
+        // 更新警报显示
+        function updateAlertsDisplay() {
+            const alertsList = document.getElementById('alertsList');
+            
+            // 统计各级别警报数量
+            const alertStats = { high: 0, medium: 0, low: 0 };
+            alerts.forEach(alert => alertStats[alert.level]++);
+            
+            document.getElementById('highAlerts').textContent = alertStats.high;
+            document.getElementById('mediumAlerts').textContent = alertStats.medium;
+            document.getElementById('lowAlerts').textContent = alertStats.low;
+            document.getElementById('totalAlerts').textContent = alerts.length;
+            
+            // 显示警报列表
+            alertsList.innerHTML = alerts.slice(0, 20).map(alert => `
+                <div class="alert-item ${alert.level}">
+                    <div class="alert-header">
+                        <div class="alert-title">${alert.title}</div>
+                        <div class="alert-time">${alert.time}</div>
+                    </div>
+                    <div class="alert-content">${alert.content}</div>
+                    <div class="alert-location">📍 ${alert.location}</div>
+                </div>
+            `).join('');
+        }
+
+        // 更新历史记录表格
+        function updateHistoryTable() {
+            const tableBody = document.getElementById('historyTableBody');
+            
+            tableBody.innerHTML = detectionData.history.slice(0, 50).map(record => `
+                <div class="table-row">
+                    <div class="table-cell">${record.time}</div>
+                    <div class="table-cell">${getTypeLabel(record.type)}</div>
+                    <div class="table-cell">${record.confidence}%</div>
+                    <div class="table-cell">${record.location}</div>
+                    <div class="table-cell">
+                        <span class="status-badge status-detected">已检测</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 获取类型标签
+        function getTypeLabel(type) {
+            const labels = {
+                plastic: '塑料瓶',
+                bag: '塑料袋',
+                can: '易拉罐',
+                bottle: '玻璃瓶',
+                unknown: '其他'
+            };
+            return labels[type] || '未知';
+        }
+
+        // 应用筛选
+        function applyFilters() {
+            // 获取筛选条件
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            const wasteType = document.getElementById('wasteType').value;
+            const confidence = document.getElementById('confidenceFilter').value;
+            
+            // 筛选历史记录
+            let filtered = detectionData.history.filter(record => {
+                let pass = true;
+                
+                // 日期筛选
+                if (startDate && new Date(record.time) < new Date(startDate)) pass = false;
+                if (endDate && new Date(record.time) > new Date(endDate)) pass = false;
+                
+                // 类型筛选
+                if (wasteType && record.type !== wasteType) pass = false;
+                
+                // 置信度筛选
+                if (confidence) {
+                    const conf = parseFloat(record.confidence);
+                    if (confidence === 'high' && conf < 90) pass = false;
+                    if (confidence === 'medium' && (conf < 70 || conf > 90)) pass = false;
+                    if (confidence === 'low' && conf > 70) pass = false;
+                }
+                
+                return pass;
+            });
+            
+            // 更新表格显示
+            const tableBody = document.getElementById('historyTableBody');
+            tableBody.innerHTML = filtered.slice(0, 50).map(record => `
+                <div class="table-row">
+                    <div class="table-cell">${record.time}</div>
+                    <div class="table-cell">${getTypeLabel(record.type)}</div>
+                    <div class="table-cell">${record.confidence}%</div>
+                    <div class="table-cell">${record.location}</div>
+                    <div class="table-cell">
+                        <span class="status-badge status-detected">已检测</span>
+                    </div>
+                </div>
+            `).join('');
+            
+            showNotification(`筛选完成，找到 ${filtered.length} 条记录`, 'success');
+        }
+
+        // 导出历史数据
+        function exportHistory() {
+            // 准备导出数据
+            const exportData = {
+                exportTime: new Date().toLocaleString(),
+                totalRecords: detectionData.history.length,
+                summary: {
+                    totalDetections: detectionData.total,
+                    byType: detectionData.types,
+                    averageConfidence: detectionData.confidences.length > 0 
+                        ? (detectionData.confidences.reduce((a, b) => a + b, 0) / detectionData.confidences.length * 100).toFixed(2)
+                        : 0
+                },
+                records: detectionData.history
+            };
+            
+            // 转换为JSON并下载
+            const dataStr = JSON.stringify(exportData, null, 2);
+            const dataBlob = new Blob([dataStr], {type: 'application/json'});
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `detection_history_${new Date().toISOString().slice(0, 10)}.json`;
+            link.click();
+            
+            showNotification('历史数据导出成功', 'success');
+        }
+
+        // 显示通知
+        function showNotification(message, type) {
+            // 创建通知元素
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 100px;
+                right: 20px;
+                padding: 1rem 1.5rem;
+                border-radius: 10px;
+                color: white;
+                font-weight: 500;
+                z-index: 10000;
+                animation: slideInRight 0.3s ease-out;
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(255,255,255,0.2);
+            `;
+            
+            // 设置样式
+            const colors = {
+                success: 'rgba(0, 255, 170, 0.8)',
+                error: 'rgba(255, 107, 107, 0.8)',
+                warning: 'rgba(255, 165, 0, 0.8)',
+                info: 'rgba(0, 228, 255, 0.8)'
+            };
+            
+            notification.style.background = colors[type] || colors.info;
+            notification.textContent = message;
+            
+            // 添加动画样式
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes slideInRight {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+                @keyframes slideOutRight {
+                    from { transform: translateX(0); opacity: 1; }
+                    to { transform: translateX(100%); opacity: 0; }
+                }
+            `;
+            document.head.appendChild(style);
+            
+            document.body.appendChild(notification);
+            
+            // 自动移除
+            setTimeout(() => {
+                notification.style.animation = 'slideOutRight 0.3s ease-in';
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            }, 3000);
+        }
+
+        // 初始化应用
+        document.addEventListener('DOMContentLoaded', function() {
+            // 初始化图表
+            initCharts();
+            
+            // 设置默认日期
+            const today = new Date();
+            const lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+            document.getElementById('endDate').value = today.toISOString().split('T')[0];
+            document.getElementById('startDate').value = lastWeek.toISOString().split('T')[0];
+            
+            // 生成一些模拟数据
+            generateMockData();
+            
+            // 定期更新数据
+            setInterval(() => {
+                if (document.getElementById('analysis').classList.contains('active')) {
+                    updateChartData();
+                }
+            }, 5000);
+            
+            showNotification('系统初始化完成', 'success');
+        });
+
+        // 生成模拟数据
+        function generateMockData() {
+            // 生成历史检测数据
+            for (let i = 0; i < 100; i++) {
+                const types = ['plastic', 'bag', 'can', 'bottle', 'unknown'];
+                const type = types[Math.floor(Math.random() * types.length)];
+                const confidence = Math.random() * 0.3 + 0.7;
+                const time = new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000);
+                
+                detectionData.history.push({
+                    time: time.toLocaleString(),
+                    type: type,
+                    confidence: (confidence * 100).toFixed(1),
+                    location: `区域${Math.floor(Math.random() * 5) + 1}`,
+                    x: Math.random() * 800,
+                    y: Math.random() * 450
+                });
+                
+                detectionData.total++;
+                detectionData.types[type]++;
+                
+                // 更新小时数据
+                const hour = time.getHours();
+                detectionData.hourly[hour]++;
+                
+                // 更新日数据
+                const day = Math.floor((Date.now() - time.getTime()) / (24 * 60 * 60 * 1000));
+                if (day < 30) {
+                    detectionData.daily[29 - day]++;
+                }
+                
+                // 记录置信度
+                detectionData.confidences.push(confidence);
+            }
+            
+            // 生成模拟警报
+            for (let i = 0; i < 10; i++) {
+                const levels = ['high', 'medium', 'low'];
+                const level = levels[Math.floor(Math.random() * levels.length)];
+                const time = new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000);
+                
+                alerts.push({
+                    id: i,
+                    level: level,
+                    title: `检测到垃圾堆积`,
+                    content: `发现大量${level === 'high' ? '塑料' : level === 'medium' ? '混合' : '少量'}垃圾`,
+                    location: `区域${Math.floor(Math.random() * 5) + 1}`,
+                    time: time.toLocaleString(),
+                    status: 'active'
+                });
+            }
+        }
+
+        // 键盘快捷键
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey) {
+                switch(e.key) {
+                    case ' ':
+                        e.preventDefault();
+                        if (stream) stopCamera(); else startCamera();
+                        break;
+                    case 's':
+                        e.preventDefault();
+                        takeSnapshot();
+                        break;
+                    case '1':
+                        e.preventDefault();
+                        showPage('monitor');
+                        break;
+                    case '2':
+                        e.preventDefault();
+                        showPage('analysis');
+                        break;
+                    case '3':
+                        e.preventDefault();
+                        showPage('alerts');
+                        break;
+                    case '4':
+                        e.preventDefault();
+                        showPage('history');
+                        break;
+                }
+            }
+        });
+    </script>
+</body>
+</html>
+
+
+
+
+
+
